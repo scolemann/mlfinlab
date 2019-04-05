@@ -16,7 +16,7 @@ class BaseBars(ABC):
     they are included here so as to avoid a complicated nested class structure.
     """
 
-    def __init__(self, file_path, metric, batch_size=2e7):
+    def __init__(self, schema, metric, batch_size=2e7):
         """
         Constructor
 
@@ -25,7 +25,7 @@ class BaseBars(ABC):
         :param batch_size: (Int) Number of rows to read in from the csv, per batch.
         """
         # Base properties
-        self.file_path = file_path
+        self.schema = schmea
         self.metric = metric
         self.batch_size = batch_size
         self.prev_tick_rule = 0
@@ -42,8 +42,8 @@ class BaseBars(ABC):
         :return: (DataFrame) Financial data structure
         """
         # Read in the first row & assert format
-        first_row = pd.read_csv(self.file_path, nrows=1)
-        self._assert_csv(first_row)
+        #first_row = pd.read_csv(self.file_path, nrows=1)
+        # self._assert_csv(first_row)
 
         if verbose:  # pragma: no cover
             print('Reading data in batches:')
@@ -52,7 +52,7 @@ class BaseBars(ABC):
         count = 0
         final_bars = []
         cols = ['date_time', 'open', 'high', 'low', 'close', 'volume']
-        for batch in pd.read_csv(self.file_path, chunksize=self.batch_size):
+        for batch in pd.read_csv(self.schema.file_path, chunksize=self.batch_size):
             if verbose:  # pragma: no cover
                 print('Batch number:', count)
 
@@ -72,6 +72,7 @@ class BaseBars(ABC):
         # Return a DataFrame
         if final_bars:
             bars_df = pd.DataFrame(final_bars, columns=cols)
+            bars_df['date_time'] = pd.to_datetime(bars_df['date_time'])
         else:
             return None
 

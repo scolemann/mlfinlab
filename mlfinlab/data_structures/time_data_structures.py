@@ -22,7 +22,7 @@ import numpy as np
 from mlfinlab.data_structures.base_bars import BaseBars
 
 
-class StandardBars(BaseBars):
+class TimeBars(BaseBars):
     """
     Contains all of the logic to construct the standard bars from chapter 2. This class shouldn't be used directly.
     We have added functions to the package such as get_dollar_bars which will create an instance of this
@@ -31,15 +31,16 @@ class StandardBars(BaseBars):
     This is because we wanted to simplify the logic as much as possible, for the end user.
     """
 
-    def __init__(self, schema, metric, threshold=50000, batch_size=20000000, to_csv=False):
+    def __init__(self, schema, threshold=50000, batch_size=20000000, to_csv=False):
 
-        BaseBars.__init__(self, schema, metric, batch_size)
+        BaseBars.__init__(self, schema, metric='time', batch_size=batch_size)
 
         # Threshold at which to sample
         self.threshold = threshold
         # Named tuple to help with the cache
         self.cache_tuple = namedtuple('CacheData',
                                       ['date_time', 'price', 'high', 'low', 'cum_ticks', 'cum_volume', 'cum_dollar'])
+        self.prev_timestamp = 0  # UTC format timestamp
 
     def _extract_bars(self, data):
         """
@@ -49,6 +50,8 @@ class StandardBars(BaseBars):
         :param data: Contains 3 columns - date_time, price, and volume.
         """
         cum_ticks, cum_dollar_value, cum_volume, high_price, low_price = self._update_counters()
+        data.iloc[:, self.schema.date_column] = data.iloc[:,
+                                                          self.schema.date_column].astyp(int)  # convert to UTC timestamp
 
         # Iterate over rows
         list_bars = []
@@ -72,14 +75,16 @@ class StandardBars(BaseBars):
             self._update_cache(date_time, price, low_price,
                                high_price, cum_ticks, cum_volume, cum_dollar_value)
 
+            time_diff = (date_time - self.prev_timestamp) / 1e9
             # If threshold reached then take a sample
-            if eval(self.metric) >= self.threshold:  # pylint: disable=eval-used
+            if time_diff >= self.threshold:  # pylint: disable=eval-used
                 self._create_bars(date_time, price,
                                   high_price, low_price, list_bars)
 
                 # Reset counters
                 cum_ticks, cum_dollar_value, cum_volume, high_price, low_price = 0, 0, 0, -np.inf, np.inf
                 self.cache = []
+                self.prev_timestamp = date_time
 
                 # Update cache after bar generation
                 self._update_cache(
@@ -126,7 +131,7 @@ class StandardBars(BaseBars):
         self.cache.append(cache_data)
 
 
-def get_dollar_bars(file_path, threshold=70000000, batch_size=20000000, verbose=True, to_csv=False):
+def get_time_bars(schema, threshold=70000000, batch_size=20000000, verbose=True, to_csv=False):
     """
     Creates the dollar bars: date_time, open, high, low, close.
 
@@ -142,42 +147,6 @@ def get_dollar_bars(file_path, threshold=70000000, batch_size=20000000, verbose=
     :return: Dataframe of dollar bars
     """
 
-    bars = StandardBars(file_path=file_path, metric='cum_dollar_value',
-                        threshold=threshold, batch_size=batch_size)
-    dollar_bars = bars.batch_run(verbose=verbose, to_csv=to_csv)
-    return dollar_bars
-
-
-def get_volume_bars(file_path, threshold=28224, batch_size=20000000, verbose=True, to_csv=False):
-    """
-    Creates the volume bars: date_time, open, high, low, close.
-
-    Following the paper "The Volume Clock: Insights into the high frequency paradigm" by Lopez de Prado, et al,
-    it is suggested that using 1/50 of the average daily volume, would result in more desirable statistical properties.
-
-    :param file_path: File path pointing to csv data.
-    :param threshold: A cumulative value above this threshold triggers a sample to be taken.
-    :param batch_size: The number of rows per batch. Less RAM = smaller batch size.
-    :param verbose: Print out batch numbers (True or False)
-    :param to_csv: Save bars to csv after every batch run (True or False)
-    :return: Dataframe of volume bars
-    """
-    bars = StandardBars(file_path, 'cum_volume', threshold, batch_size)
-    volume_bars = bars.batch_run(verbose=verbose, to_csv=to_csv)
-    return volume_bars
-
-
-def get_tick_bars(file_path, threshold=2800, batch_size=20000000, verbose=True, to_csv=False):
-    """
-    Creates the tick bars: date_time, open, high, low, close.
-
-    :param file_path: File path pointing to csv data.
-    :param threshold: A cumulative value above this threshold triggers a sample to be taken.
-    :param batch_size: The number of rows per batch. Less RAM = smaller batch size.
-    :param verbose: Print out batch numbers (True or False)
-    :param to_csv: Save bars to csv after every batch run (True or False)
-    :return: Dataframe of tick bars
-    """
-    bars = StandardBars(file_path, 'cum_ticks', threshold, batch_size)
-    tick_bars = bars.batch_run(verbose=verbose, to_csv=to_csv)
-    return tick_bars
+    bars = TimeBars(schema=schema, threshold=threshold, batch_size=batch_size)
+    time_bars = bars.batch_run(verbose=verbose, to_csv=to_csv)
+    return time_bars
