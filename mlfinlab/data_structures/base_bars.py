@@ -25,7 +25,7 @@ class BaseBars(ABC):
         :param batch_size: (Int) Number of rows to read in from the csv, per batch.
         """
         # Base properties
-        self.schema = schmea
+        self.schema = schema
         self.metric = metric
         self.batch_size = batch_size
         self.prev_tick_rule = 0
@@ -41,10 +41,6 @@ class BaseBars(ABC):
 
         :return: (DataFrame) Financial data structure
         """
-        # Read in the first row & assert format
-        #first_row = pd.read_csv(self.file_path, nrows=1)
-        # self._assert_csv(first_row)
-
         if verbose:  # pragma: no cover
             print('Reading data in batches:')
 

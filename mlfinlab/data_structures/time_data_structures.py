@@ -75,6 +75,7 @@ class TimeBars(BaseBars):
             self._update_cache(date_time, price, low_price,
                                high_price, cum_ticks, cum_volume, cum_dollar_value)
 
+            # number of seconds between timestamps (UTC timestamps in microseconds)
             time_diff = (date_time - self.prev_timestamp) / 1e9
             # If threshold reached then take a sample
             if time_diff >= self.threshold:  # pylint: disable=eval-used

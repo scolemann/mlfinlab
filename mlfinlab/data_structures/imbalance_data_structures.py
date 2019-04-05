@@ -92,10 +92,6 @@ class ImbalanceBars(BaseBars):
             if len(list_bars) == 0:
                 expected_imbalance = self._get_expected_imbalance(
                     exp_num_ticks, imbalance_array)
-            else:
-                pass
-                # print(np.abs(cum_theta), exp_num_ticks *
-                #      np.abs(expected_imbalance), np.abs(expected_imbalance))
 
             # Update cache
             self._update_cache(date_time, price, low_price, high_price, cum_ticks, cum_volume, cum_theta, exp_num_ticks,
