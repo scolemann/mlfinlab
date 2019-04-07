@@ -35,7 +35,7 @@ class RunBars(BaseBars):
     This is because we wanted to simplify the logic as much as possible, for the end user.
     """
 
-    def __init__(self, file_path, metric, num_prev_bars=3, exp_num_ticks_init=100000,
+    def __init__(self, schema, metric, num_prev_bars=3, exp_num_ticks_init=100000,
                  batch_size=2e7):
         """
         Constructor
@@ -47,7 +47,7 @@ class RunBars(BaseBars):
         :param exp_num_ticks_init: (Int) Initial number of expected ticks
         :param batch_size: (Int) Number of rows to read in from the csv, per batch
         """
-        BaseBars.__init__(self, file_path, metric, batch_size)
+        BaseBars.__init__(self, schema, metric, batch_size)
 
         # Information bar properties
         self.exp_num_ticks_init = exp_num_ticks_init
@@ -74,9 +74,9 @@ class RunBars(BaseBars):
         for row in data.values:
             # Set variables
             cum_ticks += 1
-            date_time = row[0]
-            price = np.float(row[1])
-            volume = row[2]
+            date_time = row[self.schema.date_column]
+            price = np.float(row[self.schema.price_column])
+            volume = row[self.schema.volume_column]
             cum_volume += volume
 
             # Update high low prices

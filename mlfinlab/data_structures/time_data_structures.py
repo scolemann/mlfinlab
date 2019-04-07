@@ -18,6 +18,7 @@ Many of the projects going forward will require Dollar and Volume bars.
 # Imports
 from collections import namedtuple
 import numpy as np
+import pandas as pd
 
 from mlfinlab.data_structures.base_bars import BaseBars
 
@@ -50,8 +51,8 @@ class TimeBars(BaseBars):
         :param data: Contains 3 columns - date_time, price, and volume.
         """
         cum_ticks, cum_dollar_value, cum_volume, high_price, low_price = self._update_counters()
-        data.iloc[:, self.schema.date_column] = data.iloc[:,
-                                                          self.schema.date_column].astyp(int)  # convert to UTC timestamp
+        data.iloc[:, self.schema.date_column] = pd.to_datetime(data.iloc[:,
+                                                                         self.schema.date_column]).astype(int)  # convert to UTC timestamp
 
         # Iterate over rows
         list_bars = []
