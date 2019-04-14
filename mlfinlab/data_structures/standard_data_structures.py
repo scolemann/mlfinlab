@@ -72,8 +72,13 @@ class StandardBars(BaseBars):
             self._update_cache(date_time, price, low_price,
                                high_price, cum_ticks, cum_volume, cum_dollar_value)
 
+            if self.threshold is None:
+                threshold = row[self.schema.threshold_column]
+            else:
+                threshold = self.threshold
+
             # If threshold reached then take a sample
-            if eval(self.metric) >= self.threshold:  # pylint: disable=eval-used
+            if eval(self.metric) >= threshold:  # pylint: disable=eval-used
                 self._create_bars(date_time, price,
                                   high_price, low_price, list_bars)
 
