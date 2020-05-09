@@ -1,113 +1,118 @@
 <div align="center">
-  <img src="https://github.com/hudson-and-thames/mlfinlab/blob/master/.github/logo/hudson_and_thames_logo.png" height="300"><br>
+   <a href="https://hudsonthames.org/">
+   <img src="https://raw.githubusercontent.com/hudson-and-thames/mlfinlab/master/.github/logo/hudson_and_thames_logo.png" height="300"><br>
 </div>
 
+
 -----------------
-# Machine Learning Financial Laboratory (mlfinlab)
+# Machine Learning Financial Laboratory (MlFinLab)
+[![PyPi](https://img.shields.io/pypi/v/mlfinlab.svg)]((https://pypi.org/project/mlfinlab/))
+[![Python](https://img.shields.io/pypi/pyversions/mlfinlab.svg)]((https://pypi.org/project/mlfinlab/))
 [![Build Status](https://travis-ci.com/hudson-and-thames/mlfinlab.svg?branch=master)](https://travis-ci.com/hudson-and-thames/mlfinlab)
 [![codecov](https://codecov.io/gh/hudson-and-thames/mlfinlab/branch/master/graph/badge.svg)](https://codecov.io/gh/hudson-and-thames/mlfinlab)
+
 ![pylint Score](https://mperlet.github.io/pybadge/badges/10.svg)
-[![License: BSD3](https://img.shields.io/github/license/hudson-and-thames/mlfinlab.svg)](https://opensource.org/licenses/BSD-3-Clause)
-
-[![PyPi](https://img.shields.io/pypi/v/mlfinlab.svg)]((https://pypi.org/project/mlfinlab/))
+[![Documentation Status](https://readthedocs.org/projects/mlfinlab/badge/?version=latest)](https://mlfinlab.readthedocs.io/en/latest/?badge=latest)
 [![Downloads](https://img.shields.io/pypi/dm/mlfinlab.svg)]((https://pypi.org/project/mlfinlab/))
-[![Python](https://img.shields.io/pypi/pyversions/mlfinlab.svg)]((https://pypi.org/project/mlfinlab/))
 
-MLFinLab is an open source package based on the research of Dr Marcos Lopez de Prado in his new book
-Advances in Financial Machine Learning. This implementation started out as a platform for which Ashutosh and
-Jacques could base their research project on for their [Masters in Financial Engineering at WorldQuant University](https://wqu.org/).
+MlFinlab is a python package which helps portfolio managers and traders who want to leverage the power of machine learning by providing reproducible, interpretable, and easy to use tools. 
+Adding MlFinLab to your companies pipeline is like adding a department of PhD researchers to your team.
 
-As we were working through the book we saw the opportunity to code up the implementations as well answer the 
-questions at the back of every chapter. 
+> **pip install mlfinlab**
 
-## Barriers to Entry
-As most of you know, getting through the first 3 chapters of the book is challenging as it relies on HFT data to 
-create the new financial data structures. Sourcing the HFT data is very difficult and thus we have resorted to purchasing the full history of S&P500 Emini futures tick data from [TickData LLC](https://www.tickdata.com/).
+We source all of our implementations from the most elite and peer-reviewed journals. Including publications from: 
+1. [The Journal of Financial Data Science](https://jfds.pm-research.com/)
+2. [The Journal of Portfolio Management](https://jpm.pm-research.com/)
+3. [The Journal of Algorithmic Finance](http://www.algorithmicfinance.org/)
+4. [Cambridge University Press](https://www.cambridge.org/)
 
-We are not affiliated with TickData in any way but would like to recommend others to make use of their service. The full history cost us about $750 and is worth every penny. They have really done a great job at cleaning the data and providing it in a user friendly manner. 
+We are making a big drive to include techniques from various authors, however the most dominant author would be Dr. Marcos Lopez de Prado ([QuantResearch.org](http://www.quantresearch.org/)).
+This package has its foundations in the two graduate level textbooks: 
+1. [Advances in Financial Machine Learning](https://www.amazon.co.uk/Advances-Financial-Machine-Learning-Marcos/dp/1119482089)
+2. [Machine Learning for Asset Managers](https://www.cambridge.org/core/books/machine-learning-for-asset-managers/6D9211305EA2E425D33A9F38D0AE3545)
 
-### Sample Data
-TickData does offer about 20 days worth of raw tick data which can be sourced from their website [link](https://s3-us-west-2.amazonaws.com/tick-data-s3/downloads/ES_Sample.zip).
+<div align="center">
+   <a href="https://mlfinlab.readthedocs.io/en/latest/">
+   <img src="https://raw.githubusercontent.com/hudson-and-thames/mlfinlab/master/docs/source/logo/journals.png"><br>
+</div>
 
-For those of you interested in working with a two years of sample tick, volume, and dollar bars, it is provided for in the [research repo.](https://github.com/hudson-and-thames/research/tree/master/Sample-Data).
+## Unlocking the Commons
+We are currently running a sponsorship model of “Unlocking the Commmons”. Our code base, online documentation, 
+tutorial notebooks and presentations will remain open to everyone for so long as we can meet our minimum sponsorship 
+goals. We have set the **deadline: December 2020** - for a monthly total patronage of $4000 USD.
 
-You should be able to work on a few implementations of the code with this set. 
+Nadia Eghbal explains it well: “If you'd like to open source a project but want to ensure that others will invest in 
+its long-term maintenance, you could tell your community that you'll open-source the project once you've hit a 
+certain amount of sponsorship. (Writer Tim Carmody refers to this as "unlocking the commons.")”
+
+[Become a Patron and keep MlFinLab Open!](https://www.patreon.com/HudsonThames)
+
+## Documentation & Tutorials
+We lower barriers to entry for all users by providing extensive [documentation](https://mlfinlab.readthedocs.io/en/latest/) 
+and [tutorial notebooks](https://github.com/hudson-and-thames/research), with code examples.
+
+## Who is Hudson & Thames?
+We are a private research group focused on implementing research based financial machine learning. We all work in 
+virtual teams, spread across the world, primarily: New York, London, and Kyiv.
+
+* [Website](https://hudsonthames.org/)
+* [Github Group](https://github.com/hudson-and-thames)
+* [Project Boards](https://github.com/orgs/hudson-and-thames/projects)
+* [Documentation](https://mlfinlab.readthedocs.io/en/latest/)
+
+
+## Sponsors and Donating
+A special thank you to our sponsors! If you would like to become a sponsor and help support our research, please sign 
+up on [Patreon](https://www.patreon.com/HudsonThames).
+
+Benefits include:
+1. Uninterrupted access: Should the code base pivot to closed source - your company will have access to all 
+   implementations and the source code.
+2. A seat on the Hudson & Thames advisory council and votes towards the direction of research and implementations.
+3. Ongoing access to slide show presentations and Jupyter Notebooks. (files can be edited to suit your personal 
+   needs such as classroom notes or client presentations.)
+4. Company / Organisation profile on [www.hudsonthames.org](https://hudsonthames.org/sponsors/)
+5. Use of Hudson & Thames sponsor badge on your website.
+6. Access to our communities Slack Channel.
+7. Subscription to project release updates and news.
+
+### Platinum Sponsor:
+<div align="center">
+   <a href="https://hudsonthames.org/sponsors/">
+   <img src="https://raw.githubusercontent.com/hudson-and-thames/mlfinlab/master/docs/source/logo/machine-factor-technologies.png" height="200"><br>
+</div>
+
+
+* [Machine Factor Technologies](https://machinefactor.tech/)
+
+### Gold Sponsors:
+<div align="center">
+   <a href="https://hudsonthames.org/sponsors/">
+   <img src="https://raw.githubusercontent.com/hudson-and-thames/mlfinlab/master/docs/source/logo/gold_sponsors.png" height="200"><br>
+</div>
+
+
+* [E.P. Chan & Associates](https://www.epchan.com/)
+* [Markov Capital](http://www.markovcapital.se/)
 
 ---
-
-## Notes
-* Added Chapter 5 code (Frac Diff)
-* Added Chapter 3 code (Labeling)
-* Added Imbalance and Run bars.
-* Added standard bar types (tick, volume, dollar). 
-* Works on BIG csv files 25Gigs and up.
-* Purchased high quality raw tick data.
-* Email us if you would like a sample of the standard bars.
-* Next we are busy adding the code for the labeling. See [research repo](https://github.com/hudson-and-thames/research) for the Q&A work in progress for chapter 3.
-
----
-
-## Getting Started
-
-Recommended versions:
-* Anaconda 3
-* Python 3.6
-
-### Installation for users
-The package can be installed from the PyPi index via the console:
- 1. Launch the terminal and run: ```pip install mlfinlab```
-
-### Installation for developers
-Clone the [package repo](https://github.com/hudson-and-thames/mlfinlab) to your local machine then follow the steps below.
-
-#### Installation on Mac OS X and Ubuntu Linux
-1. Make sure you install the latest version of the Anaconda 3 distribution. To do this you can follow the install and update instructions found on this link: https://www.anaconda.com/download/#mac
-2. Launch a terminal
-3. Create a New Conda Environment. From terminal: ```conda create -n <env name> python=3.6 anaconda``` accept all the requests to install.
-4. Now activate the environment with ```source activate <env name>```.
-5. From Terminal: go to the directory where you have saved the file, example: cd Desktop/mlfinlab/.
-6. Install Python requirements, by running the command: ```pip install -r requirements.txt```
-
-#### Installation on Windows
-1. Download and install the latest version of [Anaconda 3](https://www.anaconda.com/distribution/#download-section)
-2. Launch Anaconda Navigator
-3. Click Environments, choose an environment name, select Python 3.6, and click Create
-4. Click Home, browse to your new environment, and click Install under Jupyter Notebook
-5. Launch Anaconda Prompt and activate the environment: ```conda activate <env name>```
-6. From Anaconda Prompt: go to the directory where you have saved the file, example: cd Desktop/mlfinlab/.
-7. Install Python requirements, by running the command: ```pip install -r requirements.txt```
-
-### How To Run Checks Locally
-On your local machine open the terminal and cd into the working dir. 
-1. Code style checks: ```./pylint```
-2. Unit tests: ```python -m unittest discover```
-3. Code coverage: ```bash coverage```
-
-## Built With
-* [Github](https://github.com/hudson-and-thames/mlfinlab) - Development platform and repo
-* [Travis-CI](https://www.travis-ci.com) - Continuous integration, test and deploy
-
-## Authors
-
-* **Ashutosh Singh** - [LinkedIn](https://www.linkedin.com/in/ashusinghpenn/)
-* **Jacques Joubert** - [LinkedIn](https://www.linkedin.com/in/jacquesjoubert/)
-
-## Core Contributors
-
-* **Oleksandr Proskurin** - [LinkedIn](https://www.linkedin.com/in/proskurinolexandr/)
-
-## Additional Research Repo
-BlackArbsCEO has a great repo based on de Prado's research. It covers many of the questions at the back of every chapter and was the first source on Github to do so. It has also been a good source of inspiration for our research. 
-
-* [Adv Fin ML Exercises](https://github.com/BlackArbsCEO/Adv_Fin_ML_Exercises)
 
 ## Contact us
-At the moment the project is still rather small and thus I would recommend getting in touch with us over email so that we can further discuss the areas of contribution that interest you the most. As soon as we get to more than 4 maintainers we will switch over to a slack channel.
+We host a booming community of like minded data scientists and quants, join the 
+[Slack Channel](https://www.patreon.com/HudsonThames) now! Open to sponsors of our package. 
 
-For now you can get hold us at: hudsonthames19@gmail.com
+The channel has the following benefits: 
 
+* Community of like minded individuals.
+* Ask questions about the package implementations and get community feedback.
+* Occasional presentations on topics within financial machine learning.
+* A papers channel where we share the papers which are freely available.
+* Access to members of our research group.
+ 
 Looking forward to hearing from you!
 
 ## License
 
-This project is licensed under the 3-Clause BSD License - see the [LICENSE.txt](https://github.com/hudson-and-thames/mlfinlab/blob/master/LICENSE.txt) file for details.
+This project is licensed under an all rights reserved licence.
+
+[LICENSE.txt](https://github.com/hudson-and-thames/mlfinlab/blob/master/LICENSE.txt) file for details.

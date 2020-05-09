@@ -13,261 +13,270 @@ sampling. A great paper to read more about this is titled: The Volume Clock: Ins
 Lopez de Prado, et al. These ideas are then extended in another paper: Flow toxicity and liquidity
 in a high-frequency world.
 
+We have introduced two types of run bars: with expected number of tick defined through EMA (book implementation) and
+constant number of ticks.
 
 A good blog post to read, which helped us a lot in the implementation here is writen by Maksim Ivanov:
 https://towardsdatascience.com/financial-machine-learning-part-0-bars-745897d4e4ba
 """
 
 # Imports
-from collections import namedtuple
+from typing import Union, Iterable, List, Optional
+
 import numpy as np
+import pandas as pd
 
+from mlfinlab.data_structures.base_bars import BaseRunBars
 from mlfinlab.util.fast_ewma import ewma
-from mlfinlab.data_structures.base_bars import BaseBars
 
 
-class RunBars(BaseBars):
+class EMARunBars(BaseRunBars):
     """
     Contains all of the logic to construct the run bars from chapter 2. This class shouldn't be used directly.
-    We have added functions to the package such as get_dollar_run_bars which will create an instance of this
+    We have added functions to the package such as get_ema_dollar_imbalance_bars which will create an instance of this
     class and then construct the run bars, to return to the user.
 
     This is because we wanted to simplify the logic as much as possible, for the end user.
     """
 
-    def __init__(self, file_path, metric, num_prev_bars=3, exp_num_ticks_init=100000, batch_size=2e7):
+    def __init__(self, metric: str, num_prev_bars: int,
+                 expected_imbalance_window: int, exp_num_ticks_init: int,
+                 exp_num_ticks_constraints: List[float], batch_size: int, analyse_thresholds: bool):
         """
         Constructor
 
-        :param file_path: (String) Path to the csv file containing raw tick data in the format[date_time, price, volume]
-        :param metric: (String) type of imbalance bar to create. Example: "dollar_imbalance"
-        :param num_prev_bars: (Int) Window size for E[T]
-        :param exp_num_ticks_init: (Int) Initial number of expected ticks
-        :param batch_size: (Int) Number of rows to read in from the csv, per batch
+        :param metric: (str) type of run bar to create. Example: "dollar_run"
+        :param num_prev_bars: (int) Window size for E[T]s (number of previous bars to use for expected number of ticks estimation)
+        :param expected_imbalance_window: (int) EMA window used to estimate expected imbalance
+        :param exp_num_ticks_init: (int) Initial number of expected ticks
+        :param exp_num_ticks_constraints (list) Minimum and maximum possible number of expected ticks. Used to control bars sampling convergence
+        :param batch_size: (int) Number of rows to read in from the csv, per batch
+        :param analyse_thresholds: (bool) flag to return thresholds values (theta, exp_num_ticks, exp_imbalance) in a
+                                          form of Pandas DataFrame
         """
-        BaseBars.__init__(self, file_path, metric, batch_size)
+        BaseRunBars.__init__(self, metric, batch_size, num_prev_bars, expected_imbalance_window,
+                             exp_num_ticks_init, analyse_thresholds)
 
-        # Information bar properties
-        self.exp_num_ticks_init = exp_num_ticks_init
-        # Expected number of ticks extracted from prev bars
-        self.exp_num_ticks = self.exp_num_ticks_init
-        self.num_prev_bars = num_prev_bars
-        self.num_ticks_bar = []  # List of number of ticks from previous bars
-
-        # Named tuple to help with storing the cache
-        self.cache_tuple = namedtuple('CacheData',
-                                      ['date_time', 'price', 'high', 'low', 'cum_ticks', 'cum_volume',
-                                       'cum_theta_buy', 'cum_theta_sell'])
-        self.imbalance_array = {'buy': [], 'sell': []}
-        self.exp_buy_proportion, self.exp_sell_proportion = np.nan, np.nan
-
-    def _extract_bars(self, data):
-        """
-        For loop which compiles the various run bars: dollar, volume, or tick.
-
-        :param data: (DataFrame) Contains 3 columns - date_time, price, and volume.
-        :return: (List) of bars built using the current batch.
-        """
-        cum_ticks, cum_volume, cum_theta_buy, cum_theta_sell, high_price, low_price = self._update_counters()
-
-        # Iterate over rows
-        list_bars = []
-        for row in data.values:
-            # Set variables
-            cum_ticks += 1
-            date_time = row[0]
-            price = np.float(row[1])
-            volume = row[2]
-            cum_volume += volume
-
-            # Update high low prices
-            high_price, low_price = self._update_high_low(
-                high_price, low_price, price)
-
-            # Imbalance calculations
-            signed_tick = self._apply_tick_rule(price)
-            imbalance = self._get_imbalance(price, signed_tick, volume)
-
-            if imbalance > 0:
-                self.imbalance_array['buy'].append(imbalance)
-                # Set zero to keep buy and sell arrays synced
-                self.imbalance_array['sell'].append(0)
-                cum_theta_buy += imbalance
-            elif imbalance < 0:
-                self.imbalance_array['sell'].append(abs(imbalance))
-                # Set zero to keep buy and sell arrays synced
-                self.imbalance_array['buy'].append(0)
-                cum_theta_sell += abs(imbalance)
-
-            if not list_bars and np.isnan(self.exp_buy_proportion):
-                self.exp_buy_proportion, self.exp_sell_proportion = self._get_expected_imbalance(
-                    self.exp_num_ticks, self.imbalance_array)
-
-            # Update cache
-            self._update_cache(date_time, price, low_price, high_price, cum_theta_sell, cum_theta_buy,
-                               cum_ticks, cum_volume)
-
-            # Check expression for possible bar generation
-            max_proportion = max(self.exp_buy_proportion,
-                                 self.exp_sell_proportion)
-            if max(cum_theta_buy, cum_theta_sell) > self.exp_num_ticks * max_proportion:
-                self._create_bars(date_time, price,
-                                  high_price, low_price, list_bars)
-
-                self.num_ticks_bar.append(cum_ticks)
-                # Expected number of ticks based on formed bars
-                self.exp_num_ticks = ewma(np.array(self.num_ticks_bar[-self.num_prev_bars:], dtype=float),
-                                          self.num_prev_bars)[-1]
-                self.exp_buy_proportion, self.exp_sell_proportion = self._get_expected_imbalance(
-                    self.exp_num_ticks * self.num_prev_bars, self.imbalance_array)
-
-                # Reset counters
-                cum_ticks, cum_volume, cum_theta_buy, cum_theta_sell = 0, 0, 0, 0
-                high_price, low_price = -np.inf, np.inf
-                self.cache = []
-
-                # Update cache after bar generation (exp_num_ticks was changed after bar generation)
-                self._update_cache(date_time, price, low_price, high_price, cum_theta_sell, cum_theta_buy,
-                                   cum_ticks, cum_volume)
-        return list_bars
-
-    def _update_counters(self):
-        """
-        Updates the counters by resetting them or making use of the cache to update them based on a previous batch.
-
-        :return: Updated cum_ticks, cum_volume, cum_theta_buy, cum_theta_sell, high_price, low_price
-        """
-        # Check flag
-        if self.flag and self.cache:
-            latest_entry = self.cache[-1]
-
-            # Update variables based on cache
-            cum_ticks = int(latest_entry.cum_ticks)
-            cum_volume = int(latest_entry.cum_volume)
-            low_price = np.float(latest_entry.low)
-            high_price = np.float(latest_entry.high)
-            # Cumulative buy and sell imbalances for a particular run calculation (theta_t in Prado book)
-            cum_theta_buy = np.float(latest_entry.cum_theta_buy)
-            cum_theta_sell = np.float(latest_entry.cum_theta_sell)
-
+        # EMA Run Bars specific hyper parameters
+        if exp_num_ticks_constraints is None:
+            self.min_exp_num_ticks = 0
+            self.max_exp_num_ticks = np.inf
         else:
-            # Reset counters
-            cum_ticks, cum_volume, cum_theta_buy, cum_theta_sell = 0, 0, 0, 0
-            high_price, low_price = -np.inf, np.inf
+            self.min_exp_num_ticks = exp_num_ticks_constraints[0]
+            self.max_exp_num_ticks = exp_num_ticks_constraints[1]
 
-        return cum_ticks, cum_volume, cum_theta_buy, cum_theta_sell, high_price, low_price
+    def _get_exp_num_ticks(self):
+        prev_num_of_ticks = self.imbalance_tick_statistics['num_ticks_bar']
+        exp_num_ticks = ewma(np.array(
+            prev_num_of_ticks[-self.num_prev_bars:], dtype=float), self.num_prev_bars)[-1]
+        return min(max(exp_num_ticks, self.min_exp_num_ticks), self.max_exp_num_ticks)
 
-    def _update_cache(self, date_time, price, low_price, high_price, cum_theta_sell, cum_theta_buy,
-                      cum_ticks, cum_volume):
+
+class ConstRunBars(BaseRunBars):
+    """
+    Contains all of the logic to construct the imbalance bars with fixed expected number of ticks. This class shouldn't
+    be used directly. We have added functions to the package such as get_const_dollar_imbalance_bars which will create
+    an instance of this class and then construct the imbalance bars, to return to the user.
+
+    This is because we wanted to simplify the logic as much as possible, for the end user.
+    """
+
+    def __init__(self, metric: str, num_prev_bars: int,
+                 expected_imbalance_window: int, exp_num_ticks_init: int, batch_size: int,
+                 analyse_thresholds: bool):
         """
-        Update the cache which is used to create a continuous flow of bars from one batch to the next.
+        Constructor
 
-        :param date_time: Timestamp of the bar
-        :param price: The current price
-        :param low_price: Lowest price in the period
-        :param high_price: Highest price in the period
-        :param cum_theta_sell: Cumulation of negative signed ticks
-        :param cum_theta_buy: Cumulation of positive signed ticks
-        :param cum_ticks: Cumulative number of ticks
+        :param metric: (str) type of run bar to create. Example: "dollar_run"
+        :param num_prev_bars: (int) Window size for E[T]s (number of previous bars to use for expected number of ticks estimation)
+        :param expected_imbalance_window: (int) EMA window used to estimate expected run
+        :param exp_num_ticks_init: (int) Initial number of expected ticks
+        :param batch_size: (int) Number of rows to read in from the csv, per batch
+        :param analyse_thresholds: (bool) Flag to save  and return thresholds used to sample run bars
         """
-        cache_data = self.cache_tuple(date_time=date_time, price=price, high=high_price, low=low_price,
-                                      cum_ticks=cum_ticks, cum_volume=cum_volume, cum_theta_buy=cum_theta_buy,
-                                      cum_theta_sell=cum_theta_sell)
-        self.cache.append(cache_data)
+        BaseRunBars.__init__(self, metric, batch_size, num_prev_bars, expected_imbalance_window,
+                             exp_num_ticks_init,
+                             analyse_thresholds)
 
-    def _get_expected_imbalance(self, window, imbalance_array):
-        """
-        Calculate the expected imbalance as defined on page 31 and 32.
-        :param window: EWMA window for calculation
-        :param imbalance_array: numpy array of imbalances [buy, sell]
-        :return: expected_buy_proportion and expected_sell_proportion
-        """
-        if len(imbalance_array['buy']) < self.exp_num_ticks_init:
-            # Waiting for array to fill for ewma
-            ewma_window = np.nan
-        else:
-            # ewma window can be either the window specified in a function call
-            # or it is len of imbalance_array if window > len(imbalance_array)
-            ewma_window = int(min(len(imbalance_array), window))
-
-        if np.isnan(ewma_window):
-            exp_buy_proportion, exp_sell_proportion = np.nan, np.nan
-        else:
-            buy_sample = np.array(
-                imbalance_array['buy'][-ewma_window:], dtype=float)
-            sell_sample = np.array(
-                imbalance_array['sell'][-ewma_window:], dtype=float)
-            buy_and_sell_imb = sum(buy_sample) + sum(sell_sample)
-            exp_buy_proportion = ewma(
-                buy_sample, window=ewma_window)[-1] / buy_and_sell_imb
-            exp_sell_proportion = ewma(
-                sell_sample, window=ewma_window)[-1] / buy_and_sell_imb
-
-        return exp_buy_proportion, exp_sell_proportion
+    def _get_exp_num_ticks(self):
+        return self.thresholds['exp_num_ticks']
 
 
-def get_dollar_run_bars(file_path, num_prev_bars, exp_num_ticks_init=100000,
-                        batch_size=2e7, verbose=True, to_csv=False, output_path=None):
+def get_ema_dollar_run_bars(file_path_or_df: Union[str, Iterable[str], pd.DataFrame], num_prev_bars: int = 3,
+                            expected_imbalance_window: int = 10000, exp_num_ticks_init: int = 20000,
+                            exp_num_ticks_constraints: List[float] = None, batch_size: int = 2e7,
+                            analyse_thresholds: bool = False,
+                            verbose: bool = True, to_csv: bool = False, output_path: Optional[str] = None):
     """
-    Creates the dollar run bars: date_time, open, high, low, close, volume.
+    Creates the EMA dollar run bars: date_time, open, high, low, close, volume, cum_buy_volume, cum_ticks, cum_dollar_value.
 
-    :param file_path: File path pointing to csv data.
-    :param num_prev_bars: Number of previous bars used for EWMA window expected # of ticks
-    :param exp_num_ticks_init: initial expected number of ticks per bar
-    :param batch_size: The number of rows per batch. Less RAM = smaller batch size.
-    :param verbose: Print out batch numbers (True or False)
-    :param to_csv: Save bars to csv after every batch run (True or False)
-    :param output_path: Path to csv file, if to_csv is True
-    :return: DataFrame of dollar bars
+    :param file_path_or_df: (str, iterable of str, or pd.DataFrame) Path to the csv file(s) or Pandas Data Frame containing raw tick data
+                            in the format[date_time, price, volume]
+    :param num_prev_bars: (int) Window size for E[T]s (number of previous bars to use for expected number of ticks estimation)
+    :param expected_imbalance_window: (int) EMA window used to estimate expected run
+    :param exp_num_ticks_init: (int) initial expected number of ticks per bar
+    :param exp_num_ticks_constraints: (list) Minimum and maximum possible number of expected ticks. Used to control bars sampling convergence
+    :param batch_size: (int) The number of rows per batch. Less RAM = smaller batch size.
+    :param verbose: (bool) Print out batch numbers (True or False)
+    :param to_csv: (bool) Save bars to csv after every batch run (True or False)
+    :param analyse_thresholds: (bool) Flag to save  and return thresholds used to sample run bars
+    :param output_path: (str) Path to csv file, if to_csv is True
+    :return: (pd.DataFrame) DataFrame of dollar bars and DataFrame of thresholds
     """
+    bars = EMARunBars(metric='dollar_run', num_prev_bars=num_prev_bars,
+                      expected_imbalance_window=expected_imbalance_window,
+                      exp_num_ticks_init=exp_num_ticks_init, exp_num_ticks_constraints=exp_num_ticks_constraints,
+                      batch_size=batch_size, analyse_thresholds=analyse_thresholds)
+    run_bars = bars.batch_run(file_path_or_df=file_path_or_df,
+                              verbose=verbose, to_csv=to_csv, output_path=output_path)
 
-    bars = RunBars(file_path=file_path, metric='dollar_run', num_prev_bars=num_prev_bars,
-                   exp_num_ticks_init=exp_num_ticks_init, batch_size=batch_size)
-    dollar_run_bars = bars.batch_run(
-        verbose=verbose, to_csv=to_csv, output_path=output_path)
-
-    return dollar_run_bars
+    return run_bars, pd.DataFrame(bars.bars_thresholds)
 
 
-def get_volume_run_bars(file_path, num_prev_bars, exp_num_ticks_init=100000,
-                        batch_size=2e7, verbose=True, to_csv=False, output_path=None):
+def get_ema_volume_run_bars(file_path_or_df: Union[str, Iterable[str], pd.DataFrame], num_prev_bars: int = 3,
+                            expected_imbalance_window: int = 10000, exp_num_ticks_init: int = 20000,
+                            exp_num_ticks_constraints: List[float] = None, batch_size: int = 2e7,
+                            analyse_thresholds: bool = False,
+                            verbose: bool = True, to_csv: bool = False, output_path: Optional[str] = None):
     """
-    Creates the volume run bars: date_time, open, high, low, close, volume.
+    Creates the EMA volume run bars: date_time, open, high, low, close, volume, cum_buy_volume, cum_ticks, cum_dollar_value.
 
-    :param file_path: File path pointing to csv data.
-    :param num_prev_bars: Number of previous bars used for EWMA window expected # of ticks
-    :param exp_num_ticks_init: initial expected number of ticks per bar
-    :param batch_size: The number of rows per batch. Less RAM = smaller batch size.
-    :param verbose: Print out batch numbers (True or False)
-    :param to_csv: Save bars to csv after every batch run (True or False)
-    :param output_path: Path to csv file, if to_csv is True
-    :return: DataFrame of volume bars
+    :param file_pats_or_df: (str, iterable of str, or pd.DataFrame) Path to the csv file(s) or Pandas Data Frame containing raw tick data
+                            in the format[date_time, price, volume]
+    :param num_prev_bars: (int) Window size for E[T]s (number of previous bars to use for expected number of ticks estimation)
+    :param expected_imbalance_window: (int) EMA window used to estimate expected run
+    :param exp_num_ticks_init: (int) initial expected number of ticks per bar
+    :param exp_num_ticks_constraints: (list) Minimum and maximum possible number of expected ticks. Used to control bars sampling convergence
+    :param batch_size: (int) The number of rows per batch. Less RAM = smaller batch size.
+    :param verbose: (bool) Print out batch numbers (True or False)
+    :param to_csv: (bool) Save bars to csv after every batch run (True or False)
+    :param analyse_thresholds: (bool) Flag to save  and return thresholds used to sample run bars
+    :param output_path: (str) Path to csv file, if to_csv is True
+    :return: (pd.DataFrame) DataFrame of volume bars and DataFrame of thresholds
     """
-    bars = RunBars(file_path=file_path, metric='volume_run', num_prev_bars=num_prev_bars,
-                   exp_num_ticks_init=exp_num_ticks_init, batch_size=batch_size)
-    volume_run_bars = bars.batch_run(
-        verbose=verbose, to_csv=to_csv, output_path=output_path)
+    bars = EMARunBars(metric='volume_run', num_prev_bars=num_prev_bars,
+                      expected_imbalance_window=expected_imbalance_window,
+                      exp_num_ticks_init=exp_num_ticks_init, exp_num_ticks_constraints=exp_num_ticks_constraints,
+                      batch_size=batch_size, analyse_thresholds=analyse_thresholds)
+    run_bars = bars.batch_run(file_path_or_df=file_path_or_df,
+                              verbose=verbose, to_csv=to_csv, output_path=output_path)
 
-    return volume_run_bars
+    return run_bars, pd.DataFrame(bars.bars_thresholds)
 
 
-def get_tick_run_bars(file_path, num_prev_bars, exp_num_ticks_init=100000,
-                      batch_size=2e7, verbose=True, to_csv=False, output_path=None):
+def get_ema_tick_run_bars(file_path_or_df: Union[str, Iterable[str], pd.DataFrame], num_prev_bars: int = 3,
+                          expected_imbalance_window: int = 10000, exp_num_ticks_init: int = 20000,
+                          exp_num_ticks_constraints: List[float] = None, batch_size: int = 2e7,
+                          analyse_thresholds: bool = False,
+                          verbose: bool = True, to_csv: bool = False, output_path: Optional[str] = None):
     """
-    Creates the tick run bars: date_time, open, high, low, close, volume.
+    Creates the EMA tick run bars: date_time, open, high, low, close, volume, cum_buy_volume, cum_ticks, cum_dollar_value.
 
-    :param file_path: File path pointing to csv data.
-    :param num_prev_bars: Number of previous bars used for EWMA window expected # of ticks
-    :param exp_num_ticks_init: initial expected number of ticks per bar
-    :param batch_size: The number of rows per batch. Less RAM = smaller batch size.
-    :param verbose: Print out batch numbers (True or False)
-    :param to_csv: Save bars to csv after every batch run (True or False)
-    :param output_path: Path to csv file, if to_csv is True
-    :return: DataFrame of tick bars
+    :param file_path_or_df: (str, iterable of str, or pd.DataFrame) Path to the csv file(s) or Pandas Data Frame containing raw tick data
+                            in the format[date_time, price, volume]
+    :param num_prev_bars: (int) Window size for E[T]s (number of previous bars to use for expected number of ticks estimation)
+    :param expected_imbalance_window: (int) EMA window used to estimate expected run
+    :param exp_num_ticks_init: (int) initial expected number of ticks per bar
+    :param exp_num_ticks_constraints: (list) Minimum and maximum possible number of expected ticks. Used to control bars sampling convergence
+    :param batch_size: (int) The number of rows per batch. Less RAM = smaller batch size.
+    :param verbose: (bool) Print out batch numbers (True or False)
+    :param to_csv: (bool) Save bars to csv after every batch run (True or False)
+    :param analyse_thresholds: (bool) Flag to save  and return thresholds used to sample run bars
+    :param output_path: (str) Path to csv file, if to_csv is True
+    :return: (pd.DataFrame) DataFrame of tick bars and DataFrame of thresholds
     """
-    bars = RunBars(file_path=file_path, metric='tick_run', num_prev_bars=num_prev_bars,
-                   exp_num_ticks_init=exp_num_ticks_init, batch_size=batch_size)
-    tick_run_bars = bars.batch_run(
-        verbose=verbose, to_csv=to_csv, output_path=output_path)
+    bars = EMARunBars(metric='tick_run', num_prev_bars=num_prev_bars,
+                      expected_imbalance_window=expected_imbalance_window,
+                      exp_num_ticks_init=exp_num_ticks_init, exp_num_ticks_constraints=exp_num_ticks_constraints,
+                      batch_size=batch_size, analyse_thresholds=analyse_thresholds)
+    run_bars = bars.batch_run(file_path_or_df=file_path_or_df,
+                              verbose=verbose, to_csv=to_csv, output_path=output_path)
 
-    return tick_run_bars
+    return run_bars, pd.DataFrame(bars.bars_thresholds)
+
+
+def get_const_dollar_run_bars(file_path_or_df: Union[str, Iterable[str], pd.DataFrame], num_prev_bars: int,
+                              expected_imbalance_window: int = 10000, exp_num_ticks_init: int = 20000,
+                              batch_size: int = 2e7, analyse_thresholds: bool = False,
+                              verbose: bool = True, to_csv: bool = False, output_path: Optional[str] = None):
+    """
+    Creates the Const dollar run bars: date_time, open, high, low, close, volume, cum_buy_volume, cum_ticks, cum_dollar_value.
+
+    :param file_path_or_df: (str, iterable of str, or pd.DataFrame) Path to the csv file(s) or Pandas Data Frame containing raw tick data
+                            in the format[date_time, price, volume]
+    :param num_prev_bars: (int) Window size for estimating buy ticks proportion (number of previous bars to use in EWMA)
+    :param expected_imbalance_window: (int) EMA window used to estimate expected imbalance
+    :param exp_num_ticks_init: (int) initial expected number of ticks per bar
+    :param batch_size: (int) The number of rows per batch. Less RAM = smaller batch size.
+    :param verbose: (bool) Print out batch numbers (True or False)
+    :param to_csv: (bool) Save bars to csv after every batch run (True or False)
+    :param analyse_thresholds: (bool) Flag to save  and return thresholds used to sample run bars
+    :param output_path: (str) Path to csv file, if to_csv is True
+    :return: DataFrame of dollar bars and DataFrame of thresholds, if to_csv=True returns None
+    """
+    bars = ConstRunBars(metric='dollar_run', num_prev_bars=num_prev_bars,
+                        expected_imbalance_window=expected_imbalance_window,
+                        exp_num_ticks_init=exp_num_ticks_init,
+                        batch_size=batch_size, analyse_thresholds=analyse_thresholds)
+    run_bars = bars.batch_run(file_path_or_df=file_path_or_df,
+                              verbose=verbose, to_csv=to_csv, output_path=output_path)
+
+    return run_bars, pd.DataFrame(bars.bars_thresholds)
+
+
+def get_const_volume_run_bars(file_path_or_df: Union[str, Iterable[str], pd.DataFrame], num_prev_bars: int,
+                              expected_imbalance_window: int = 10000, exp_num_ticks_init: int = 20000,
+                              batch_size: int = 2e7, analyse_thresholds: bool = False,
+                              verbose: bool = True, to_csv: bool = False, output_path: Optional[str] = None):
+    """
+    Creates the Const volume run bars: date_time, open, high, low, close, volume, cum_buy_volume, cum_ticks, cum_dollar_value.
+
+    :param file_path_or_df: (str, iterable of str, or pd.DataFrame) Path to the csv file(s) or Pandas Data Frame containing raw tick data
+                            in the format[date_time, price, volume]
+    :param num_prev_bars: (int) Window size for estimating buy ticks proportion (number of previous bars to use in EWMA)
+    :param expected_imbalance_window: (int) EMA window used to estimate expected imbalance
+    :param exp_num_ticks_init: (int) initial expected number of ticks per bar
+    :param batch_size: (int) The number of rows per batch. Less RAM = smaller batch size.
+    :param verbose: (bool) Print out batch numbers (True or False)
+    :param to_csv: (bool) Save bars to csv after every batch run (True or False)
+    :param analyse_thresholds: (bool) Flag to save  and return thresholds used to sample run bars
+    :param output_path: (str) Path to csv file, if to_csv is True
+    :return: DataFrame of volume bars and DataFrame of thresholds
+    """
+    bars = ConstRunBars(metric='volume_run', num_prev_bars=num_prev_bars,
+                        expected_imbalance_window=expected_imbalance_window,
+                        exp_num_ticks_init=exp_num_ticks_init,
+                        batch_size=batch_size, analyse_thresholds=analyse_thresholds)
+    run_bars = bars.batch_run(file_path_or_df=file_path_or_df,
+                              verbose=verbose, to_csv=to_csv, output_path=output_path)
+
+    return run_bars, pd.DataFrame(bars.bars_thresholds)
+
+
+def get_const_tick_run_bars(file_path_or_df: Union[str, Iterable[str], pd.DataFrame], num_prev_bars: int,
+                            expected_imbalance_window: int = 10000, exp_num_ticks_init: int = 20000,
+                            batch_size: int = 2e7, analyse_thresholds: bool = False,
+                            verbose: bool = True, to_csv: bool = False, output_path: Optional[str] = None):
+    """
+    Creates the Const tick run bars: date_time, open, high, low, close, volume, cum_buy_volume, cum_ticks, cum_dollar_value.
+
+    :param file_path_or_df: (str, iterable of str, or pd.DataFrame) Path to the csv file(s) or Pandas Data Frame containing raw tick data
+                            in the format[date_time, price, volume]
+    :param num_prev_bars: (int) Window size for estimating buy ticks proportion (number of previous bars to use in EWMA)
+    :param expected_imbalance_window: (int) EMA window used to estimate expected imbalance
+    :param exp_num_ticks_init: (int) initial expected number of ticks per bar
+    :param batch_size: (int) The number of rows per batch. Less RAM = smaller batch size.
+    :param verbose: (bool) Print out batch numbers (True or False)
+    :param to_csv: (bool) Save bars to csv after every batch run (True or False)
+    :param analyse_thresholds: (bool) Flag to save  and return thresholds used to sample run bars
+    :param output_path: (str) Path to csv file, if to_csv is True
+    :return: DataFrame of tick bars and DataFrame of thresholds
+    """
+    bars = ConstRunBars(metric='tick_run', num_prev_bars=num_prev_bars,
+                        expected_imbalance_window=expected_imbalance_window,
+                        exp_num_ticks_init=exp_num_ticks_init,
+                        batch_size=batch_size, analyse_thresholds=analyse_thresholds)
+    run_bars = bars.batch_run(file_path_or_df=file_path_or_df,
+                              verbose=verbose, to_csv=to_csv, output_path=output_path)
+
+    return run_bars, pd.DataFrame(bars.bars_thresholds)
